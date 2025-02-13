@@ -170,15 +170,16 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
     noise = torch.randn_like(x)
     noise[:, 1:, :, :] = x[:, 1:, :, :]
 
-    x_start = x.clone()
-    x_start[0, 0, :, :] = overlapping_patch
-
+    x_t = x.clone()
+    x_t[0, 0, :, :] = overlapping_patch
     img = noise.clone()
 
     for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
         time_cond = torch.full((b,), time, device=device, dtype=torch.long)
 
-        img = prepare_input(img, overlap_mask, x_start)
+        x_t[0, 0, :, :] = overlapping_patch
+        x_q = q_sample(x_t, time_cond, noise)
+        img = prepare_input(img, overlap_mask, x_q)
 
         pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start=False, rederive_pred_noise=True)
 
