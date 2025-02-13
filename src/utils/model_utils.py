@@ -56,8 +56,8 @@ def create_lcl_ctx_channels(img, overlap=0.2):
     inputs = []
     patch_coords = []
     
-    for i in range(0, image_size - micro_patch_size + 1, stride):
-        for j in range(0, image_size - micro_patch_size + 1, stride):
+    for i in range(0, image_size, stride):
+        for j in range(0, image_size, stride):
             x_center = i + micro_patch_size // 2
             y_center = j + micro_patch_size // 2
             
@@ -68,12 +68,10 @@ def create_lcl_ctx_channels(img, overlap=0.2):
     
     return inputs, patch_coords
 
-
 def create_inputs(img, img_channels, patch_coords, mask_shape):
     upscaled_img = cv2.resize(img[0].numpy(), (mask_shape, mask_shape))
     _, breast_mask = keep_only_breast(upscaled_img)
     breast_mask = torch.from_numpy(breast_mask).float()
-
     inputs = []
     black_idx = []
     for idx, (patch, local_context, img) in enumerate(img_channels):
@@ -162,13 +160,12 @@ def generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, t
 def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
     return generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, timesteps)
 
-def stitch_patches(patches, overlap):
+def stitch_patches(patches, overlap, final_shape):
     num_rows = int(np.sqrt(len(patches)))
-    final_shape = num_rows*PATCH_REAL_SIZE
     patches_arr = np.array(patches)
     min_value = patches_arr.min()
 
-    final_img = np.zeros((final_shape, final_shape)) + min_value
+    final_img = np.zeros((num_rows*PATCH_REAL_SIZE, num_rows*PATCH_REAL_SIZE)) + min_value
     overlap_value = int(overlap * PATCH_REAL_SIZE)
     for idx, sample in enumerate(patches_arr):
         patch = sample[0]
@@ -179,6 +176,7 @@ def stitch_patches(patches, overlap):
         y = j * PATCH_REAL_SIZE - j * overlap_value
         final_img[x:x+PATCH_REAL_SIZE, y:y+PATCH_REAL_SIZE] = patch
 
+    final_img = final_img[:final_shape, :final_shape]
     return final_img
 
 
@@ -191,8 +189,8 @@ def create_patch_channels(lcl_ctx_img, img, overlap=0.125):
     inputs = []
     patch_coords = []
 
-    for i in range(0, image_size - micro_patch_size + 1, stride):
-        for j in range(0, image_size - micro_patch_size + 1, stride):
+    for i in range(0, image_size, stride):
+        for j in range(0, image_size, stride):
             x_center = i + micro_patch_size // 2
             y_center = j + micro_patch_size // 2
             

@@ -53,7 +53,7 @@ if __name__ == "__main__":
         img_channels, patch_coords = create_lcl_ctx_channels(img, overlap=OVERLAP)
         inputs, black_idx = create_inputs(img, img_channels, patch_coords, mask_shape=MID_IMAGE_SIZE)
         local_contexts = generate_patches(local_context_model, inputs, black_idx, timesteps=timesteps, overlap=OVERLAP, device=device)
-        mid_img = stitch_patches(local_contexts, overlap=OVERLAP)
+        mid_img = stitch_patches(local_contexts, overlap=OVERLAP, final_shape=MID_IMAGE_SIZE)
         save_image_to_dir(mid_img, str(Path(save_dir) / f'whole_middle.png'))
         save_patches_to_dir(local_contexts, lc_dir)
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         img_channels, patch_coords = create_patch_channels(torch.from_numpy(mid_img).unsqueeze(0), img, overlap=OVERLAP)
         inputs, black_idx = create_inputs(img, img_channels, patch_coords, mask_shape=FINAL_IMAGE_SIZE)
         patches = generate_patches(patch_model, inputs, black_idx, timesteps=timesteps, overlap=OVERLAP, device=device)
-        final_img = stitch_patches(patches, overlap=OVERLAP)
+        final_img = stitch_patches(patches, overlap=OVERLAP, final_shape=FINAL_IMAGE_SIZE)
         save_image_to_dir(final_img, str(Path(save_dir) / f'whole_large.png'))
         save_patches_to_dir(patches, patches_dir)
 
