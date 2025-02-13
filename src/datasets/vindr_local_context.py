@@ -1,4 +1,4 @@
-]import os
+import os
 
 import pandas as pd
 from pydicom import dcmread
