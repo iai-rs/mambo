@@ -35,14 +35,14 @@ def load_classifier_free_model(model_path, channels=1, dim=128, dim_mults=(1, 2,
     return model
 
 
-def generate_whole_image(model, device, batch_size=1, img_class=''):
+def generate_whole_image(model, device, batch_size=1, img_class='', sampling_timesteps=150):
     model = model.to(device)
     model.eval()       
     if IS_COND:
         ctx = torch.tensor([img_class]).int().to(device)
         samples = sample_cond(model, image_size=(batch_size, 1, image_size, image_size), ctx=ctx, cond_scale=5.)
     else:
-        samples = sample(model, image_size=(batch_size, 1, image_size, image_size))    
+        samples = sample(model, image_size=(batch_size, 1, image_size, image_size), sampling_timesteps=sampling_timesteps)    
     model = model.to('cpu')
     return samples[0].cpu()
 
@@ -115,7 +115,7 @@ def prepare_input(in_img, mask, x_q):
     return in_img
 
 
-def generate_patches(model, inputs, black_idx, overlap, timesteps, device):
+def generate_patches(model, inputs, black_idx, overlap, total_timesteps, sampling_timesteps, device):
     model = model.to(device)
     model.eval()
     patches = []
@@ -129,7 +129,7 @@ def generate_patches(model, inputs, black_idx, overlap, timesteps, device):
         overlap_mask, overlapping_patch = get_overlapping_patch(input_tensor, overlap, patches, idx, num_rows)
         x = input_tensor.unsqueeze(0).to(torch.float32)
 
-        patch = generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps)
+        patch = generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps, sampling_timesteps)
         patches.append(patch[0].cpu().numpy())
     model = model.to('cpu')
     return patches
@@ -197,8 +197,8 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
 
     return img
 
-def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
-    return generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=timesteps)
+def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150):
+    return generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=timesteps, sampling_timesteps=sampling_timesteps)
 
 def stitch_patches(patches, overlap, final_shape):
     num_rows = int(np.sqrt(len(patches)))

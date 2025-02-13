@@ -177,9 +177,9 @@ def p_sample_loop(model, shape, ctx=None):
     return img
 
 @torch.no_grad()
-def sample(model, image_size, ctx=None):
+def sample(model, image_size, sampling_timesteps, ctx=None):
     #return p_sample_loop(model, shape=image_size, ctx=ctx)
-    return ddim_sample(model, shape=image_size, sampling_timesteps=150)
+    return ddim_sample(model, shape=image_size, sampling_timesteps=sampling_timesteps)
 
 # test sample
 @torch.no_grad()
