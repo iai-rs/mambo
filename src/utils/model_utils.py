@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 
-from src.config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, IS_COND, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size
+from src.config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, IS_COND, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size, PATCH_SCALE_FACTOR
 from src.models.ddpm import sample, p_sample, q_sample
 from src.models.unet import Unet
 from src.models.ddpm_classifier_free import Unet as Unet_class
@@ -170,8 +170,7 @@ def stitch_patches(patches, overlap):
     overlap_value = int(overlap * PATCH_REAL_SIZE)
     for idx, sample in enumerate(patches_arr):
         patch = sample[0]
-        # if patch.all() == min_value:
-        #     patch = patch + min_value
+
         i = idx // num_rows
         j = idx % num_rows
         x = i * PATCH_REAL_SIZE - i * overlap_value
@@ -186,7 +185,7 @@ def create_patch_channels(lcl_ctx_img, img, overlap=0.125):
     
     num_patches = ORIG_IMG_SIZE // PATCH_REAL_SIZE
     micro_patch_size = image_size // num_patches  # size of one patch (without ovelap)
-    stride = int(micro_patch_size * (1 - overlap))  # Pomeraj izmedju patcheva
+    stride = int(micro_patch_size * (1 - overlap)) 
     inputs = []
     patch_coords = []
 
@@ -199,7 +198,7 @@ def create_patch_channels(lcl_ctx_img, img, overlap=0.125):
             shifted_tensor = torch.from_numpy(shifted)
             patch = CenterCrop(PATCH_REAL_SIZE).forward(shifted_tensor)
 
-            patch_coords.append((i, j, PATCH_REAL_SIZE, PATCH_REAL_SIZE))
+            patch_coords.append((i*PATCH_SCALE_FACTOR, j*PATCH_SCALE_FACTOR, PATCH_REAL_SIZE, PATCH_REAL_SIZE))
             inputs.append((None, patch.numpy(), img))
     
     return inputs, patch_coords
