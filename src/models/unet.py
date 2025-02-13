@@ -7,7 +7,7 @@ from einops.layers.torch import Rearrange
 import math
 from functools import partial
 
-from src.models.attend import Attend
+from models.attend import Attend
 
 # helpers functions
 

@@ -4,14 +4,14 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 
-from src.config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, IS_COND, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size, PATCH_SCALE_FACTOR
-from src.models.ddpm import sample, p_sample, q_sample
-from src.models.unet import Unet
-from src.models.ddpm_classifier_free import Unet as Unet_class
-from src.models.ddpm_cond import sample as sample_cond
-from src.utils.data_utils import normalize, shift_image, keep_only_breast
+from config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, IS_COND, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size, PATCH_SCALE_FACTOR
+from models.unet import Unet
+from models.ddpm_classifier_free import Unet as Unet_class
+from models.ddpm_cond import sample as sample_cond
+from utils.data_utils import normalize, shift_image, keep_only_breast
 import torchvision.transforms.functional as Fn
 from torchvision.transforms import CenterCrop
+from models.ddpm import *
 
 def load_model(model_path, channels=3, dim=128, dim_mults=(1, 2, 2, 4, 4)):
     model_checkpoint = torch.load(model_path, map_location='cpu')
@@ -137,7 +137,7 @@ def generate_patches(model, inputs, black_idx, overlap, timesteps, device):
     return patches
 
 
-def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
+def generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
     b = x.shape[0]
     x = x.to(device)
     overlapping_patch = overlapping_patch.to(device)
@@ -159,6 +159,8 @@ def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timest
 
     return in_img
 
+def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
+    return generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, timesteps)
 
 def stitch_patches(patches, overlap):
     num_rows = int(np.sqrt(len(patches)))
