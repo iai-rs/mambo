@@ -157,8 +157,47 @@ def generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, t
 
     return in_img
 
+@torch.inference_mode()
+def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=0.0):
+    b = x.shape[0]
+    x = x.to(device)
+    overlapping_patch = overlapping_patch.to(device)
+    
+    times = torch.linspace(-1, total_timesteps - 1, steps = sampling_timesteps + 1)   
+    times = list(reversed(times.int().tolist()))
+    time_pairs = list(zip(times[:-1], times[1:]))  
+
+    noise = torch.randn_like(x)
+    noise[:, 1:, :, :] = x[:, 1:, :, :]
+
+    x_start = x.clone()
+    x_start[0, 0, :, :] = overlapping_patch
+
+    img = noise.clone()
+
+    for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
+        time_cond = torch.full((b,), time, device=device, dtype=torch.long)
+
+        img = prepare_input(img, overlap_mask, x_start)
+
+        pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start=False, rederive_pred_noise=True)
+
+        if time_next < 0:
+            img = x_start
+            continue
+
+        alpha = alphas_cumprod[time]
+        alpha_next = alphas_cumprod[time_next]
+
+        sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+        c = (1 - alpha_next - sigma ** 2).sqrt()
+
+        img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
+
+    return img
+
 def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
-    return generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, timesteps)
+    return generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=timesteps)
 
 def stitch_patches(patches, overlap, final_shape):
     num_rows = int(np.sqrt(len(patches)))
