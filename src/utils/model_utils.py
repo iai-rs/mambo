@@ -4,11 +4,12 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 
-from src.config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, IS_COND, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size, PATCH_SCALE_FACTOR
+from src.config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size, PATCH_SCALE_FACTOR
 from src.models.ddpm import sample, p_sample, q_sample
 from src.models.unet import Unet
 from src.models.ddpm_classifier_free import Unet as Unet_class
 from src.models.ddpm_cond import sample as sample_cond
+from src.models.ddpm_cond import p_sample as p_sample_cond
 from src.utils.data_utils import normalize, shift_image, keep_only_breast
 import torchvision.transforms.functional as Fn
 from torchvision.transforms import CenterCrop
@@ -38,7 +39,7 @@ def load_classifier_free_model(model_path, channels=1, dim=128, dim_mults=(1, 2,
 def generate_whole_image(model, device, batch_size=1, img_class=''):
     model = model.to(device)
     model.eval()       
-    if IS_COND:
+    if img_class != '':
         ctx = torch.tensor([img_class]).int().to(device)
         samples = sample_cond(model, image_size=(batch_size, 1, image_size, image_size), ctx=ctx, cond_scale=5.)
     else:
@@ -115,7 +116,7 @@ def prepare_input(in_img, mask, x_q):
     return in_img
 
 
-def generate_patches(model, inputs, black_idx, overlap, timesteps, device):
+def generate_patches(model, inputs, black_idx, overlap, timesteps, device, cond_idx=''):
     model = model.to(device)
     model.eval()
     patches = []
@@ -129,14 +130,15 @@ def generate_patches(model, inputs, black_idx, overlap, timesteps, device):
         overlap_mask, overlapping_patch = get_overlapping_patch(input_tensor, overlap, patches, idx, num_rows)
         x = input_tensor.unsqueeze(0).to(torch.float32)
 
-        patch = generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps)
+        patch = generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps, cond_idx=cond_idx)
         patches.append(patch[0].cpu().numpy())
     model = model.to('cpu')
     return patches
 
 
-def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
+def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000, cond_idx=''):
     b = x.shape[0]
+    channels = x.shape[1]
     x = x.to(device)
     overlapping_patch = overlapping_patch.to(device)
     t = torch.full((b,), timesteps-1, device=device, dtype=torch.long)
@@ -153,8 +155,11 @@ def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timest
         t = torch.full((b,), i, device=device, dtype=torch.long)
         x_q = q_sample(x_start, t, noise)
         in_img = prepare_input(in_img, overlap_mask, x_q)
-        in_img = p_sample(model, in_img, t)
-
+        if cond_idx == '':
+            in_img = p_sample(model, in_img, t)
+        else:
+            ctx = torch.tensor([cond_idx]).int().to(device)
+            in_img = p_sample_cond(model, in_img, t, ctx=ctx, cond_scale = 5.)
     return in_img
 
 
@@ -167,6 +172,8 @@ def stitch_patches(patches, overlap, final_shape):
     overlap_value = int(overlap * PATCH_REAL_SIZE)
     for idx, sample in enumerate(patches_arr):
         patch = sample[0]
+        if patch.mean() == patch.max():
+            patch = np.zeros_like(patch) + min_value
 
         i = idx // num_rows
         j = idx % num_rows
