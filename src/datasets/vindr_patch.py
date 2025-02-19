@@ -12,8 +12,9 @@ from torchvision.transforms import (
     CenterCrop,
 )
 import torchvision.transforms.functional as F
-from ..utils.data_utils import preprocess_scan, get_breast_mask
+from utils.data_utils import preprocess_scan, get_breast_mask
 import random
+import cv2
 
 
 def get_patch(
@@ -51,26 +52,36 @@ def get_patch(
     return x
 
 class VINDR_Dataset(Dataset):
-    def __init__(self, csv_path='data/train.csv', images_path='data/train_images', transform=None):
+    def __init__(self, csv_path='/vindr/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/finding_annotations.csv', images_path='/vindr/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images', transform=None):
         self.csv_path = csv_path
         self.images_path = images_path
         df = pd.read_csv(self.csv_path)
         
-#         df = df[df["finding_categories"] == r"['No Finding']"]
+        df = df[df["finding_categories"] == r"['No Finding']"]
 #         df = df[df['breast_birads'].isin(['BI-RADS 1', 'BI-RADS 2'])] #keep only the healthiest breasts
-#         df = df[df["height"] == 3518]
-        df = df[df['split'] == 'training']
+        df = df[df["height"] == 3518]
+#         df = df[df['split'] == 'training']
         df = df.reset_index(drop=True)
         
         self.data = df
+        self.patches = pd.read_csv('/home/milica.skipina.ivi/nj/mambo/src/datasets/vindr_patches.csv')
         self.transform = transform
 
     def __len__(self):
-        return len(self.data)
+        return len(self.patches)
 
     def __getitem__(self, index):
+        xmin = self.patches.loc[index, 'xmin']
+        ymin = self.patches.loc[index, 'ymin']
+        xmax = self.patches.loc[index, 'xmax']
+        ymax = self.patches.loc[index, 'ymax']
+        
+        index = self.patches.loc[index, 'image_id']
+        
+        
         study_id = self.data.loc[index, "study_id"]
         image_id = self.data.loc[index, "image_id"]
+        
         image_path = os.path.join(
             self.images_path, str(study_id), str(image_id) + ".dicom"
         )
@@ -80,8 +91,16 @@ class VINDR_Dataset(Dataset):
         image = image / 65536
         image = image.astype(np.float32)
         image, _ = preprocess_scan(image)
+        
+        patch = image[xmin:xmax, ymin:ymax]
+        
+        padded_image = np.pad(image, ((256, 256), (256, 256)), mode='constant', constant_values=np.min(image))
 
-        x = get_patch(image, image_size=None, transform=self.transform)
-
-        return x
+        lc = padded_image[xmin:xmax + 512, ymin:ymax + 512]
+ 
+        image = cv2.resize(image, (256, 256))
+        lc = cv2.resize(lc, (256, 256))
+        
+         
+        return ((np.asarray([patch, lc, image]) - 0.007) / 0.01).astype(np.float32)
         

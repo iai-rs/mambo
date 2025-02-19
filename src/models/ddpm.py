@@ -321,3 +321,45 @@ def ddim_sample(model, shape=(1, 1, 256,256), ctx=None, total_timesteps=1000, sa
     ret = img if not return_all_timesteps else torch.stack(imgs, dim = 1)
 
     return ret
+
+@torch.inference_mode()
+def ddim_sample_patch(model, x, ctx=None, total_timesteps=1000, sampling_timesteps=50, eta=0.0):
+    device = next(model.parameters()).device
+    
+    if not isinstance(x, torch.Tensor):
+        x = torch.tensor(x, device=device)
+    else:
+        x = x.to(device) 
+
+        
+    times = torch.linspace(-1, total_timesteps - 1, steps = sampling_timesteps + 1)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
+    times = list(reversed(times.int().tolist()))
+    time_pairs = list(zip(times[:-1], times[1:])) # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
+
+    x_start = None
+    
+    img = torch.randn_like(x)
+
+    for time, time_next in tqdm(time_pairs, desc = 'sampling loop time step'):
+        x[0, 0] = img[0, 0]
+        time_cond = torch.full((x.shape[0],), time, device = device, dtype = torch.long)
+        pred_noise, x_start, *_ = model_predictions(model, x, time_cond, None, clip_x_start = False, rederive_pred_noise = True)
+
+        if time_next < 0:
+            img = x_start
+            continue
+
+        alpha = alphas_cumprod[time]
+        alpha_next = alphas_cumprod[time_next]
+
+        sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+        c = (1 - alpha_next - sigma ** 2).sqrt()
+
+        noise = torch.randn_like(img)
+
+        img = x_start * alpha_next.sqrt() + \
+              c * pred_noise + \
+              sigma * noise
+
+        
+    return img.cpu()[0][0]

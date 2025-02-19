@@ -31,34 +31,35 @@ def pipeline(whole_image_model, local_context_model, patch_model, sampling_times
     lc_dir = os.path.join(save_dir, 'local_contexts')
     patches_dir = os.path.join(save_dir, 'patches')
 
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    if not os.path.exists(lc_dir):
-        os.makedirs(lc_dir)
-    if not os.path.exists(patches_dir):
-        os.makedirs(patches_dir)
+    #if not os.path.exists(save_dir):
+    #    os.makedirs(save_dir)
+    #if not os.path.exists(lc_dir):
+    #    os.makedirs(lc_dir)
+    #if not os.path.exists(patches_dir):
+    #    os.makedirs(patches_dir)
 
     print(f'start: {save_dir}')
 
     # generate small image 
     img = generate_whole_image(whole_image_model, device, batch_size=1, img_class=img_class, sampling_timesteps=sampling_timesteps)
-    save_image_to_dir(img, str(Path(save_dir) / f'whole_small.png'))
+    #save_image_to_dir(img, str(Path(save_dir) / f'whole_small.png'))
 
     # generate local contexts and middle size image
     img_channels, patch_coords = create_lcl_ctx_channels(img, overlap=OVERLAP)
+    print(patch_coords)
     inputs, black_idx = create_inputs(img, img_channels, patch_coords, mask_shape=MID_IMAGE_SIZE)
     local_contexts = generate_patches(local_context_model, inputs, black_idx, total_timesteps=total_timesteps, sampling_timesteps=sampling_timesteps, overlap=OVERLAP, device=device)
     mid_img = stitch_patches(local_contexts, overlap=OVERLAP, final_shape=MID_IMAGE_SIZE)
-    save_image_to_dir(mid_img, str(Path(save_dir) / f'whole_middle.png'))
-    save_patches_to_dir(local_contexts, lc_dir)
+    #save_image_to_dir(mid_img, str(Path(save_dir) / f'whole_middle.png'))
+    #save_patches_to_dir(local_contexts, lc_dir)
 
     # generate patches and final image
     img_channels, patch_coords = create_patch_channels(torch.from_numpy(mid_img).unsqueeze(0), img, overlap=OVERLAP)
     inputs, black_idx = create_inputs(img, img_channels, patch_coords, mask_shape=FINAL_IMAGE_SIZE)
     patches = generate_patches(patch_model, inputs, black_idx, total_timesteps=total_timesteps, sampling_timesteps=sampling_timesteps, overlap=OVERLAP, device=device)
     final_img = stitch_patches(patches, overlap=OVERLAP, final_shape=FINAL_IMAGE_SIZE)
-    save_image_to_dir(final_img, str(Path(save_dir) / f'whole_large.png'))
-    save_patches_to_dir(patches, patches_dir)
+    #save_image_to_dir(final_img, str(Path(save_dir) / f'whole_large.png'))
+    #save_patches_to_dir(patches, patches_dir)
 
     print(f'done: {save_dir}')
 

@@ -16,10 +16,10 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
-from ..utils.data_utils import preprocess_scan
+from utils.data_utils import preprocess_scan
 
 class RSNA_Dataset(Dataset):
-    def __init__(self, csv_path='data/train.csv', images_path='data/train_images', only_birads_labeled=False, transform=None, target_transform=None):
+    def __init__(self, csv_path='/rsna/train.csv', images_path='/rsna/train_images', only_birads_labeled=True, transform=None, target_transform=None):
         self.csv_path = csv_path
         self.images_path = images_path
         df = pd.read_csv(self.csv_path)
@@ -27,6 +27,8 @@ class RSNA_Dataset(Dataset):
         if only_birads_labeled:
             df.dropna(subset=["BIRADS"], inplace=True)
             df.reset_index(inplace=True)
+        
+        df = df[df['BIRADS'] == 0]
 
         self.data = df
         self.transform = transform

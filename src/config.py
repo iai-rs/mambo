@@ -25,14 +25,15 @@ FINAL_IMAGE_SIZE = PATCH_REAL_SIZE * PATCH_SCALE_FACTOR * LOCAL_CONTEXT_SCALE_FA
 IS_COND = False
 OVERLAP=0.125
 
-server='mambo'
+
+server='fmle'
 if server == 'fmle':
-    WH_PATH = '../models/artifacts/vindr_healthy_256:v82/model_124499.pt'
-    LC_PATH = '../models/artifacts/vindr_lcl_ctx_3072:v37/model_56999.pt'
-    PH_PATH = '../models/artifacts/vindr_3c_256_v2:v84/model_169999.pt'
+    artifacts_dir = '/home/milica.skipina.ivi/projects/test_git/mambo/models/artifacts'
     SAVE_DIR = '/lustre/seed/vindr_birads_cond/'
 elif server == 'mambo':
-    WH_PATH = '/mambo/artifacts/vindr_healthy_256:v82/model_124499.pt'
-    LC_PATH = '/mambo/artifacts/vindr_lcl_ctx_3072:v37/model_56999.pt'
-    PH_PATH = '/mambo/artifacts/vindr_3c_256_v2:v84/model_169999.pt'
+    artifacts_dir = '/mambo/artifacts'
     SAVE_DIR = '/mambo/data/'
+
+WH_PATH = f'{artifacts_dir}/vindr_healthy_256:v82/model_124499.pt'
+LC_PATH = f'{artifacts_dir}/vindr_lcl_ctx_3072:v37/model_56999.pt'
+PH_PATH = f'{artifacts_dir}/vindr_3c_256_v2:v84/model_169999.pt'

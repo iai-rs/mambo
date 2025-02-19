@@ -157,6 +157,7 @@ def generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, t
 
     return in_img
 
+
 @torch.inference_mode()
 def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=0.0):
     b = x.shape[0]
@@ -166,21 +167,24 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
     times = torch.linspace(-1, total_timesteps - 1, steps = sampling_timesteps + 1)   
     times = list(reversed(times.int().tolist()))
     time_pairs = list(zip(times[:-1], times[1:]))  
+    t = torch.full((b,), total_timesteps-1, device=device, dtype=torch.long)
 
     noise = torch.randn_like(x)
     noise[:, 1:, :, :] = x[:, 1:, :, :]
 
     x_t = x.clone()
     x_t[0, 0, :, :] = overlapping_patch
-    img = noise.clone()
+    x_q = q_sample(x_t, t, noise)
+    img = prepare_input(noise, overlap_mask, x_q)
 
     for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
         time_cond = torch.full((b,), time, device=device, dtype=torch.long)
 
-        x_t[0, 0, :, :] = overlapping_patch
         x_q = q_sample(x_t, time_cond, noise)
-        img = prepare_input(img, overlap_mask, x_q)
 
+#          x_q = torch.sqrt(alpha_next) * x_t + torch.sqrt(1 - alpha_next) * pred_noise
+        x_q[:, 1:, :, :] = x_t[:, 1:, :, :]
+        img = prepare_input(img, overlap_mask, x_q)
         pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start=False, rederive_pred_noise=True)
 
         if time_next < 0:
@@ -194,7 +198,11 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
         c = (1 - alpha_next - sigma ** 2).sqrt()
 
         img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
-
+        
+        x_q = torch.sqrt(alpha_next) * x_t + torch.sqrt(1 - alpha_next) * pred_noise
+        x_q[:, 1:, :, :] = x_t[:, 1:, :, :]
+        img = prepare_input(img, overlap_mask, x_q)
+    img = prepare_input(img, overlap_mask, x_t)
     return img
 
 def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150):
