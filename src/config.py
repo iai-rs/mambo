@@ -37,3 +37,7 @@ elif server == 'mambo':
 WH_PATH = f'{artifacts_dir}/vindr_healthy_256:v82/model_124499.pt'
 LC_PATH = f'{artifacts_dir}/vindr_lcl_ctx_3072:v37/model_56999.pt'
 PH_PATH = f'{artifacts_dir}/vindr_3c_256_v2:v84/model_169999.pt'
+
+RSNA_WH_PATH = f'{artifacts_dir}/rsna_machine49_256:v178/model_268499.pt'
+RSNA_LC_PATH = f'{artifacts_dir}/rsna_3c_local_ctx_m49:v14/model_22499.pt'
+RSNA_PH_PATH = f'{artifacts_dir}/rsna_3c_256:v70/model_131999.pt'

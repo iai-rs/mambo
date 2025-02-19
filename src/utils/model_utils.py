@@ -180,11 +180,6 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
     for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
         time_cond = torch.full((b,), time, device=device, dtype=torch.long)
 
-        x_q = q_sample(x_t, time_cond, noise)
-
-#          x_q = torch.sqrt(alpha_next) * x_t + torch.sqrt(1 - alpha_next) * pred_noise
-        x_q[:, 1:, :, :] = x_t[:, 1:, :, :]
-        img = prepare_input(img, overlap_mask, x_q)
         pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start=False, rederive_pred_noise=True)
 
         if time_next < 0:
@@ -196,14 +191,15 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
 
         sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
         c = (1 - alpha_next - sigma ** 2).sqrt()
-
-        img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
         
-        x_q = torch.sqrt(alpha_next) * x_t + torch.sqrt(1 - alpha_next) * pred_noise
+        img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * noise
+    
+        x_q = q_sample(x_t, time_cond, noise)
         x_q[:, 1:, :, :] = x_t[:, 1:, :, :]
         img = prepare_input(img, overlap_mask, x_q)
-    img = prepare_input(img, overlap_mask, x_t)
+
     return img
+
 
 def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150):
     return generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=timesteps, sampling_timesteps=sampling_timesteps)
