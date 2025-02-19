@@ -12,14 +12,14 @@ from torchvision.transforms import (
     CenterCrop,
 )
 import torchvision.transforms.functional as F
-from utils.data_utils import preprocess_scan, get_breast_mask
+from utils.data_utils import preprocess_scan, get_breast_mask, shift_image
 import random
 import cv2
 
 
-
 class RSNA_Dataset(Dataset):
     def __init__(self, csv_path='/home/milica.skipina.ivi/nj/mambo/src/rsna_train_with_shape.csv', images_path='/rsna/train_images', transform=None):
+        
         self.csv_path = csv_path
         self.images_path = images_path
         df = pd.read_csv(self.csv_path)
@@ -29,7 +29,6 @@ class RSNA_Dataset(Dataset):
         self.data = df
         self.patches = pd.read_csv('/home/milica.skipina.ivi/nj/mambo/src/datasets/rsna_patches.csv')
         self.transform = transform
-    
 
     def __len__(self):
         return len(self.patches)
@@ -41,6 +40,8 @@ class RSNA_Dataset(Dataset):
         ymax = self.patches.loc[index, 'ymax']
         
         index = self.patches.loc[index, 'image_id']
+        
+        
         study_id = self.data.loc[index, "patient_id"]
         image_id = self.data.loc[index, "image_id"]
         
@@ -54,7 +55,10 @@ class RSNA_Dataset(Dataset):
         image = image.astype(np.float32)
         image, _ = preprocess_scan(image)
         
-        patch = image[xmin:xmax, ymin:ymax]
+        x_center = (xmin + xmax) // 2
+        y_center = (ymin + ymax) // 2
+        
+        shifted = shift_image(image, x_center, y_center)
         
         padded_image = np.pad(image, ((256, 256), (256, 256)), mode='constant', constant_values=np.min(image))
 
@@ -62,6 +66,7 @@ class RSNA_Dataset(Dataset):
  
         image = cv2.resize(image, (256, 256))
         lc = cv2.resize(lc, (256, 256))
-        
+        shifted = cv2.resize(shifted, (256, 256))
          
-        return ((np.asarray([patch, lc, image]) - 0.007) / 0.01).astype(np.float32)
+        return ((np.asarray([lc, shifted, image]) - 0.007) / 0.01).astype(np.float32)
+
