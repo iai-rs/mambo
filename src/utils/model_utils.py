@@ -159,7 +159,7 @@ def generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, t
     return in_img
 
 @torch.inference_mode()
-def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=0.7):
+def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=1.0):
     b = x.shape[0]
     x = x.to(device)
     overlapping_patch = overlapping_patch.to(device)
@@ -201,7 +201,7 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
     return img
 
 
-def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=0.7):
+def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=1.0):
     if sampling_timesteps < total_timesteps:
         return generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=timesteps, sampling_timesteps=sampling_timesteps, eta=eta)
     else:

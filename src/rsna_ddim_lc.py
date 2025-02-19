@@ -8,7 +8,7 @@ from models.unet import Unet
 from models.ddpm_classifier_free import Unet as Unet_class
 from utils.image_utils import save_image_to_dir, save_patches_to_dir
 from utils.model_utils import (load_model, load_classifier_free_model, generate_whole_image, create_lcl_ctx_channels, 
-                               create_inputs, generate_patches, stitch_patches, create_patch_channels)
+                               create_inputs, generate_patches, stitch_patches, create_patch_channels, generate_one_patch)
 from config import IS_COND, OVERLAP, MID_IMAGE_SIZE, FINAL_IMAGE_SIZE, total_timesteps, RSNA_WH_PATH, RSNA_LC_PATH, RSNA_PH_PATH, SAVE_DIR
 import einops
 
@@ -19,13 +19,14 @@ model = load_model(RSNA_LC_PATH, channels=3)
 model = model.to('cuda')
 
 for i, x in enumerate(RSNA_Dataset()):
-    try:
-        save_dir = f'/lustre/ddim-gen/rsna/lc/{i}/'
-        os.makedirs(save_dir, exist_ok=True)
-        plt.imsave(save_dir + 'orig.png', x[0], cmap='gray')
+#     try:
+    save_dir = f'/lustre/ddim-gen-eta/rsna/lc/{i}/'
+    os.makedirs(save_dir, exist_ok=True)
+    plt.imsave(save_dir + 'orig.png', x[0], cmap='gray')
 
-        for steps in [50, 100, 150, 200]:
-                patch = ddim_sample_patch(model, einops.rearrange(x, 'c h w -> 1 c h w'), sampling_timesteps=steps)
-                plt.imsave(save_dir + f'{steps}.png', patch, cmap='gray')
-    except:
-        pass
+    for steps in [50, 100, 150, 200]:
+        y = generate_one_patch(model, einops.rearrange(x, 'c h w -> 1 c h w'), torch.ones((256, 256)), torch.ones((256, 256)), 'cuda', sampling_timesteps=steps).cpu()
+        patch = y[0, 0]
+        plt.imsave(save_dir + f'{steps}.png', patch, cmap='gray')
+#     except
+            #         pass

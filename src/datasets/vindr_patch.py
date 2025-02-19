@@ -102,5 +102,5 @@ class VINDR_Dataset(Dataset):
         lc = cv2.resize(lc, (256, 256))
         
          
-        return ((np.asarray([patch, lc, image]) - 0.007) / 0.01).astype(np.float32)
+        return torch.Tensor(((np.asarray([patch, lc, image]) - 0.007) / 0.01).astype(np.float32))
         
