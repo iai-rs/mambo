@@ -11,7 +11,7 @@ from torchvision.transforms import (
     CenterCrop,
 )
 import torchvision.transforms.functional as F
-from ..utils.data_utils import preprocess_scan, get_breast_mask, shift_image
+from utils.data_utils import preprocess_scan, get_breast_mask, shift_image
 import random
 
 
@@ -34,7 +34,7 @@ def get_patch(
     x_center = random_coordinate[0]
     y_center = random_coordinate[1]
     
-    shifted = shift_image(image[0], x_center, y_center)
+    shifted = shift_image(image[0].numpy(), x_center, y_center)
     shifted_tensor = torch.from_numpy(shifted).float().unsqueeze(0)
     local_context = CenterCrop(local_context_size).forward(shifted_tensor)
 
@@ -42,24 +42,25 @@ def get_patch(
     shifted = transform(shifted_tensor[0].unsqueeze(0))
     image = transform(image[0].unsqueeze(0))
 
-    x = torch.cat([local_context, shifted, image], dim=0) 
+    x = torch.cat([local_context, shifted], dim=0) 
     return x
 
 
 class VINDR_Dataset(Dataset):
-    def __init__(self, csv_path='data/train.csv', images_path='data/train_images', transform=None):
+    def __init__(self, csv_path='data/train.csv', images_path='data/train_images', local_context_size=768, transform=None):
         self.csv_path = csv_path
         self.images_path = images_path
         df = pd.read_csv(self.csv_path)
         
-#         df = df[df["finding_categories"] == r"['No Finding']"]
+        df = df[df["finding_categories"] == r"['No Finding']"]
 #         df = df[df['breast_birads'].isin(['BI-RADS 1', 'BI-RADS 2'])] #keep only the healthiest breasts
-#         df = df[df["height"] == 3518]
-        df = df[df['split'] == 'training']
+        df = df[df["height"] == 3518]
+#         df = df[df['split'] == 'training']
         df = df.reset_index(drop=True)
         
         self.data = df
         self.transform = transform
+        self.local_context_size = local_context_size
 
     def __len__(self):
         return len(self.data)
@@ -78,7 +79,7 @@ class VINDR_Dataset(Dataset):
         image = image.astype(np.float32)
         image, _ = preprocess_scan(image)
 
-        x = get_patch(image, image_size=None, transform=self.transform)
+        x = get_patch(image, local_context_size=self.local_context_size, image_size=None, transform=self.transform)
         return x
                                               
 

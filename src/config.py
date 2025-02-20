@@ -1,4 +1,4 @@
-total_epochs = 132000
+total_epochs = 1000000
 save_every = 2000
 learning_rate = 5e-5
 batch_size = 8
@@ -24,6 +24,7 @@ LOCAL_CONTEXT_SCALE_FACTOR = MID_IMAGE_SIZE // PATCH_REAL_SIZE
 FINAL_IMAGE_SIZE = PATCH_REAL_SIZE * PATCH_SCALE_FACTOR * LOCAL_CONTEXT_SCALE_FACTOR
 IS_COND = False
 OVERLAP=0.125
+exp_name='vindr_two_channels_local_context_768'
 
 server='fmle'
 if server == 'fmle':
