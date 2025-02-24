@@ -4,7 +4,7 @@ learning_rate = 5e-5
 batch_size = 8
 image_size = 256
 optimizer_type = 'adam'
-timesteps = 1000
+total_timesteps = 1000
 channels = 3
 input_dim = 128
 dim_mults = (1, 2, 2, 4, 4)
@@ -23,3 +23,15 @@ MID_IMAGE_SIZE = ORIG_IMG_SIZE // PATCH_SCALE_FACTOR
 LOCAL_CONTEXT_SCALE_FACTOR = MID_IMAGE_SIZE // PATCH_REAL_SIZE
 FINAL_IMAGE_SIZE = PATCH_REAL_SIZE * PATCH_SCALE_FACTOR * LOCAL_CONTEXT_SCALE_FACTOR
 OVERLAP=0.125
+
+server='mambo'
+if server == 'fmle':
+    WH_PATH = '../models/artifacts/vindr_healthy_256:v82/model_124499.pt'
+    LC_PATH = '../models/artifacts/vindr_lcl_ctx_3072:v37/model_56999.pt'
+    PH_PATH = '../models/artifacts/vindr_3c_256_v2:v84/model_169999.pt'
+    SAVE_DIR = '/lustre/seed/vindr_birads_cond/'
+elif server == 'mambo':
+    WH_PATH = '/mambo/artifacts/vindr_healthy_256:v82/model_124499.pt'
+    LC_PATH = '/mambo/artifacts/vindr_lcl_ctx_3072:v37/model_56999.pt'
+    PH_PATH = '/mambo/artifacts/vindr_3c_256_v2:v84/model_169999.pt'
+    SAVE_DIR = '/mambo/data/'

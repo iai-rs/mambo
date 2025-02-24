@@ -5,7 +5,7 @@ import cv2
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
-from src.utils.data_utils import normalize
+from utils.data_utils import normalize
 import torch
 import numpy as np
 

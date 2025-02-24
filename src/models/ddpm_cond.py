@@ -145,8 +145,9 @@ def p_sample(model, x, t, ctx=None, cond_scale = 6., rescaled_phi = 0.7):
     
 # @torch.no_grad()
 # def p_sample(self, x, t: int, classes, cond_scale = 6., rescaled_phi = 0.7, clip_denoised = True):
+#     b, *_, device = *x.shape, x.device
+#     batched_times = torch.full((x.shape[0],), t, device = x.device, dtype = torch.long)
 #     model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, classes = classes, cond_scale = cond_scale, rescaled_phi = rescaled_phi, clip_denoised = clip_denoised)
-
 #     noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
 #     pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
 #     return pred_img, x_start

@@ -9,7 +9,7 @@ from einops import rearrange
 import torch
 from torch import nn, einsum
 import torch.nn.functional as F
-
+from collections import namedtuple
 
 # network helpers
 def exists(x):
@@ -20,6 +20,8 @@ def default(val, d):
         return val
     return d() if isfunction(d) else d
 
+def identity(t, *args, **kwargs):
+    return t
 
 def extract(a, t, x_shape):
     batch_size = t.shape[0]
@@ -83,9 +85,13 @@ sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
 # calculations for diffusion q(x_t | x_{t-1}) and others
 sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
 sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
+sqrt_recip_alphas_cumprod = torch.sqrt(1. / alphas_cumprod)
+sqrt_recipm1_alphas_cumprod = torch.sqrt(1. / alphas_cumprod - 1)
 
 # calculations for posterior q(x_{t-1} | x_t, x_0)
 posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
+
+ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
 # forward diffusion
 def q_sample(x_start, t, noise=None):
@@ -171,9 +177,9 @@ def p_sample_loop(model, shape, ctx=None):
     return img
 
 @torch.no_grad()
-def sample(model, image_size, ctx=None):
-    return p_sample_loop(model, shape=image_size, ctx=ctx)
-
+def sample(model, image_size, sampling_timesteps, ctx=None):
+    #return p_sample_loop(model, shape=image_size, ctx=ctx)
+    return ddim_sample(model, shape=image_size, sampling_timesteps=sampling_timesteps)
 
 # test sample
 @torch.no_grad()
@@ -250,3 +256,68 @@ def test_sample(model, z_v, timesteps=1000):
     # z_v -> (batch_size, embedding size)
     # return [z_v]
     return test_p_sample_loop(model, z_v, timesteps=timesteps)
+def predict_start_from_noise(x_t, t, noise):
+    return (
+        extract(sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
+        extract(sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
+    )
+
+def predict_noise_from_start(x_t, t, x0):
+    return (
+        (extract(sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t - x0) / \
+        extract(sqrt_recipm1_alphas_cumprod, t, x_t.shape)
+    )
+
+def model_predictions(model, x, t, x_self_cond = None, clip_x_start = False, rederive_pred_noise = False):
+    model_output = model(x, t, x_self_cond)
+    maybe_clip = partial(torch.clamp, min = -1., max = 1.) if clip_x_start else identity
+
+    pred_noise = model_output
+
+    x_start = predict_start_from_noise(x, t, pred_noise)
+    x_start = maybe_clip(x_start)
+
+    if clip_x_start and rederive_pred_noise:
+        pred_noise = predict_noise_from_start(x, t, x_start)
+
+    return ModelPrediction(pred_noise, x_start)
+
+@torch.inference_mode()
+def ddim_sample(model, shape=(1, 1, 256,256), ctx=None, total_timesteps=1000, sampling_timesteps=500, eta=0.0, return_all_timesteps = False):
+    device = next(model.parameters()).device
+
+    times = torch.linspace(-1, total_timesteps - 1, steps = sampling_timesteps + 1)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
+    times = list(reversed(times.int().tolist()))
+    time_pairs = list(zip(times[:-1], times[1:])) # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
+
+    img = torch.randn(shape, device = device)
+    imgs = [img]
+
+    x_start = None
+
+    for time, time_next in tqdm(time_pairs, desc = 'sampling loop time step'):
+        time_cond = torch.full((shape[0],), time, device = device, dtype = torch.long)
+        pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start = False, rederive_pred_noise = True)
+
+        if time_next < 0:
+            img = x_start
+            imgs.append(img)
+            continue
+
+        alpha = alphas_cumprod[time]
+        alpha_next = alphas_cumprod[time_next]
+
+        sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+        c = (1 - alpha_next - sigma ** 2).sqrt()
+
+        noise = torch.randn_like(img)
+
+        img = x_start * alpha_next.sqrt() + \
+              c * pred_noise + \
+              sigma * noise
+
+        imgs.append(img)
+
+    ret = img if not return_all_timesteps else torch.stack(imgs, dim = 1)
+
+    return ret
