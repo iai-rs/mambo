@@ -100,6 +100,8 @@ class VINDR_Dataset(Dataset):
         padded_image = np.pad(image, ((256, 256), (256, 256)), mode='constant', constant_values=np.min(image))
 
         lc = padded_image[xmin:xmax + 512, ymin:ymax + 512]
+        lc = CenterCrop(256).forward(torch.from_numpy(lc))
+        lc = np.array(lc)
  
         image = cv2.resize(image, (256, 256))
         lc = cv2.resize(lc, (256, 256))
