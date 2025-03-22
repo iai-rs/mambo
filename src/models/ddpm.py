@@ -122,9 +122,9 @@ def p_losses(model, x_start, t, noise=None, cond=None, loss_type="l2"):
     if loss_type == 'l1':
         loss = F.l1_loss(noise[:, 0, :, :], predicted_noise[:, 0, :, :])
     elif loss_type == 'l2':
-        loss = F.mse_loss(noise, predicted_noise)
+        loss = F.mse_loss(noise[:, 0, :, :], predicted_noise[:, 0, :, :])
     elif loss_type == "huber":
-        loss = F.smooth_l1_loss(noise, predicted_noise)
+        loss = F.smooth_l1_loss(noise[:, 0, :, :], predicted_noise[:, 0, :, :])
     else:
         raise NotImplementedError()
 

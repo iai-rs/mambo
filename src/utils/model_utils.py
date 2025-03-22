@@ -4,15 +4,14 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 
-from src.config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size, PATCH_SCALE_FACTOR
-from src.models.ddpm import sample, p_sample, q_sample
-from src.models.unet import Unet
-from src.models.ddpm_classifier_free import Unet as Unet_class
-from src.models.ddpm_cond import sample as sample_cond
-from src.models.ddpm_cond import p_sample as p_sample_cond
-from src.utils.data_utils import normalize, shift_image, keep_only_breast
+from config import ORIG_IMG_SIZE, PATCH_REAL_SIZE, IS_COND, LOCAL_CONTEXT_SIZE, MID_IMAGE_SIZE, LOCAL_CONTEXT_SCALE_FACTOR, image_size, PATCH_SCALE_FACTOR
+from models.unet import Unet
+from models.unet_classifier_free import Unet as Unet_class
+from models.ddpm_classifier_free import sample as sample_cond
+from utils.data_utils import normalize, shift_image, keep_only_breast
 import torchvision.transforms.functional as Fn
 from torchvision.transforms import CenterCrop
+from models.ddpm import *
 
 def load_model(model_path, channels=3, dim=128, dim_mults=(1, 2, 2, 4, 4)):
     model_checkpoint = torch.load(model_path, map_location='cpu')
@@ -36,14 +35,14 @@ def load_classifier_free_model(model_path, channels=1, dim=128, dim_mults=(1, 2,
     return model
 
 
-def generate_whole_image(model, device, batch_size=1, img_class=''):
+def generate_whole_image(model, device, batch_size=1, img_class=None, sampling_timesteps=150, cond_scale=5.0):
     model = model.to(device)
     model.eval()       
-    if img_class != '':
+    if IS_COND:
         ctx = torch.tensor([img_class]).int().to(device)
-        samples = sample_cond(model, image_size=(batch_size, 1, image_size, image_size), ctx=ctx, cond_scale=5.)
+        samples = sample_cond(model, image_size=(batch_size, 1, image_size, image_size), sampling_timesteps=sampling_timesteps, classes=ctx, cond_scale=cond_scale)
     else:
-        samples = sample(model, image_size=(batch_size, 1, image_size, image_size))    
+        samples = sample(model, image_size=(batch_size, 1, image_size, image_size), sampling_timesteps=sampling_timesteps)    
     model = model.to('cpu')
     return samples[0].cpu()
 
@@ -68,6 +67,7 @@ def create_lcl_ctx_channels(img, overlap=0.2):
             inputs.append((None, shifted, img))
     
     return inputs, patch_coords
+
 
 def create_inputs(img, img_channels, patch_coords, mask_shape):
     upscaled_img = cv2.resize(img[0].numpy(), (mask_shape, mask_shape))
@@ -116,7 +116,7 @@ def prepare_input(in_img, mask, x_q):
     return in_img
 
 
-def generate_patches(model, inputs, black_idx, overlap, timesteps, device, cond_idx=''):
+def generate_patches(model, inputs, black_idx, overlap, total_timesteps, sampling_timesteps, eta, device):
     model = model.to(device)
     model.eval()
     patches = []
@@ -129,16 +129,15 @@ def generate_patches(model, inputs, black_idx, overlap, timesteps, device, cond_
         
         overlap_mask, overlapping_patch = get_overlapping_patch(input_tensor, overlap, patches, idx, num_rows)
         x = input_tensor.unsqueeze(0).to(torch.float32)
-
-        patch = generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps, cond_idx=cond_idx)
+        patch = generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps, sampling_timesteps, eta)
+    
         patches.append(patch[0].cpu().numpy())
     model = model.to('cpu')
     return patches
 
 
-def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timesteps=1000, cond_idx=''):
+def generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, timesteps=1000):
     b = x.shape[0]
-    channels = x.shape[1]
     x = x.to(device)
     overlapping_patch = overlapping_patch.to(device)
     t = torch.full((b,), timesteps-1, device=device, dtype=torch.long)
@@ -155,13 +154,58 @@ def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, timest
         t = torch.full((b,), i, device=device, dtype=torch.long)
         x_q = q_sample(x_start, t, noise)
         in_img = prepare_input(in_img, overlap_mask, x_q)
-        if cond_idx == '':
-            in_img = p_sample(model, in_img, t)
-        else:
-            ctx = torch.tensor([cond_idx]).int().to(device)
-            in_img = p_sample_cond(model, in_img, t, ctx=ctx, cond_scale = 5.)
+        in_img = p_sample(model, in_img, t)
+
     return in_img
 
+@torch.inference_mode()
+def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=0.7):
+    b = x.shape[0]
+    x = x.to(device)
+    overlapping_patch = overlapping_patch.to(device)
+    
+    times = torch.linspace(-1, total_timesteps - 1, steps = sampling_timesteps + 1)   
+    times = list(reversed(times.int().tolist()))
+    time_pairs = list(zip(times[:-1], times[1:]))  
+    t = torch.full((b,), total_timesteps-1, device=device, dtype=torch.long)
+
+    noise = torch.randn_like(x)
+    noise[:, 1:, :, :] = x[:, 1:, :, :]
+
+    x_t = x.clone()
+    x_t[0, 0, :, :] = overlapping_patch
+    x_q = q_sample(x_t, t, noise)
+    img = prepare_input(noise, overlap_mask, x_q)
+
+    for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
+        time_cond = torch.full((b,), time, device=device, dtype=torch.long)
+        
+        x_q = q_sample(x_t, time_cond, noise)
+        img = prepare_input(img, overlap_mask, x_q)
+
+        pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start=False, rederive_pred_noise=True)
+
+        if time_next < 0:
+            img = x_start
+            continue
+
+        alpha = alphas_cumprod[time]
+        alpha_next = alphas_cumprod[time_next]
+            
+        sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+        c = (1 - alpha_next - sigma ** 2).sqrt()
+        new_noise = torch.randn_like(img)
+
+        img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * new_noise
+        
+    return img
+
+
+def generate_one_patch(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=0.7):
+    if sampling_timesteps < total_timesteps:
+        return generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=timesteps, sampling_timesteps=sampling_timesteps, eta=eta)
+    else:
+        return generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, timesteps=sampling_timesteps)
 
 def stitch_patches(patches, overlap, final_shape):
     num_rows = int(np.sqrt(len(patches)))
@@ -172,8 +216,6 @@ def stitch_patches(patches, overlap, final_shape):
     overlap_value = int(overlap * PATCH_REAL_SIZE)
     for idx, sample in enumerate(patches_arr):
         patch = sample[0]
-        if patch.mean() == patch.max():
-            patch = np.zeros_like(patch) + min_value
 
         i = idx // num_rows
         j = idx % num_rows

@@ -9,7 +9,7 @@ channels = 3
 input_dim = 128
 dim_mults = (1, 2, 2, 4, 4)
 
-dataset='vindr'
+dataset='rsna'
 if dataset == "rsna":
     ORIG_IMG_SIZE = 3840
 elif dataset == "vindr":
@@ -22,13 +22,14 @@ LOCAL_CONTEXT_SIZE = PATCH_REAL_SIZE * PATCH_SCALE_FACTOR
 MID_IMAGE_SIZE = ORIG_IMG_SIZE // PATCH_SCALE_FACTOR
 LOCAL_CONTEXT_SCALE_FACTOR = MID_IMAGE_SIZE // PATCH_REAL_SIZE
 FINAL_IMAGE_SIZE = PATCH_REAL_SIZE * PATCH_SCALE_FACTOR * LOCAL_CONTEXT_SCALE_FACTOR
+IS_COND=True
 OVERLAP=0.125
 
-server='mambo'
+server='fmle'
 if server == 'fmle':
-    WH_PATH = '../models/artifacts/vindr_healthy_256:v82/model_124499.pt'
-    LC_PATH = '../models/artifacts/vindr_lcl_ctx_3072:v37/model_56999.pt'
-    PH_PATH = '../models/artifacts/vindr_3c_256_v2:v84/model_169999.pt'
+    WH_PATH = '/lustre/mambo/models/artifacts/rsna_birads_whole:v462/model_204000.pt'
+    LC_PATH = '/lustre/mambo/models/artifacts/vindr_lcl_ctx_3072:v37/model_56999.pt'
+    PH_PATH = '/lustre/mambo/models/artifacts/vindr_3c_256_v2:v84/model_169999.pt'
     SAVE_DIR = '/lustre/seed/vindr_birads_cond/'
 elif server == 'mambo':
     WH_PATH = '/mambo/artifacts/vindr_healthy_256:v82/model_124499.pt'
