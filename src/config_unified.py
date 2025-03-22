@@ -24,7 +24,7 @@ LOCAL_CONTEXT_SCALE_FACTOR = MID_IMAGE_SIZE // PATCH_REAL_SIZE
 FINAL_IMAGE_SIZE = PATCH_REAL_SIZE * PATCH_SCALE_FACTOR * LOCAL_CONTEXT_SCALE_FACTOR
 IS_COND = False
 OVERLAP=0.125
-exp_name = 'vindr_local_context_256'
+exp_name = 'vindr_unified_4x'
 
 server='fmle'
 if server == 'fmle':

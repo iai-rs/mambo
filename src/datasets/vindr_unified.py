@@ -17,7 +17,6 @@ import random
 
 def get_patch(
     image,
-    local_context_size=256*3,
     image_size=None,
     transform = None
 ):
@@ -27,6 +26,8 @@ def get_patch(
     image = Tensor(np.array([image, mask]))
     if image_size is not None:
         image = Resize(image_size, antialias=True).forward(image)
+    else:
+        image_size = image.shape[1]
 
     mask_coordinates = np.where(image[1] == 1)  # find foreground indexes
     mask_coordinates = list(zip(mask_coordinates[0], mask_coordinates[1]))
@@ -36,22 +37,26 @@ def get_patch(
     
     shifted = shift_image(np.array(image[0]), x_center, y_center)
     shifted_tensor = torch.from_numpy(shifted).float().unsqueeze(0)
+    
+    local_context_size = random.randrange(1024, image_size, 4)
     local_context = CenterCrop(local_context_size).forward(shifted_tensor)
-
+    
+    patch = CenterCrop(local_context_size//4).forward(local_context)
+    
+    patch = transform(patch[0].unsqueeze(0))
     local_context = transform(local_context[0].unsqueeze(0))
-    shifted = transform(shifted_tensor[0].unsqueeze(0))
     image = transform(image[0].unsqueeze(0))
 
-    x = torch.cat([local_context, shifted], dim=0) 
+    x = torch.cat([patch, local_context], dim=0) 
     return x
 
 
 class VINDR_Dataset(Dataset):
-    def __init__(self, csv_path='data/train.csv', images_path='data/train_images', local_context_size=768, transform=None):
+    def __init__(self, csv_path='data/train.csv', images_path='data/train_images', transform=None):
         self.csv_path = csv_path
         self.images_path = images_path
         df = pd.read_csv(self.csv_path)
-        
+
 #         df = df[df["finding_categories"] == r"['No Finding']"]
 #         df = df[df['breast_birads'].isin(['BI-RADS 1', 'BI-RADS 2'])] #keep only the healthiest breasts
 #         df = df[df["height"] == 3518]
@@ -60,7 +65,6 @@ class VINDR_Dataset(Dataset):
         
         self.data = df
         self.transform = transform
-        self.local_context_size = local_context_size
 
     def __len__(self):
         return len(self.data)
@@ -79,7 +83,7 @@ class VINDR_Dataset(Dataset):
         image = image.astype(np.float32)
         image, _ = preprocess_scan(image)
 
-        x = get_patch(image, image_size=None, local_context_size=self.local_context_size, transform=self.transform)
+        x = get_patch(image, image_size=None, transform=self.transform)
         return x
-                                              
+
 

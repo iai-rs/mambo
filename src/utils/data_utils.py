@@ -96,10 +96,11 @@ def pad(image):
     if n_rows == n_cols:
         return image
 
-    target_shape = (np.maximum(n_rows, n_cols),)*2
+#     target_shape = (np.maximum(n_rows, n_cols),)*2
+    target_shape = (3072, 3072)
 
     padded_img = np.zeros(shape=target_shape).astype(image.dtype)
-    padded_img[:n_rows, :n_cols] = image
+    padded_img[:n_rows, :n_cols] = image[:3072, :3072]
 
     return padded_img
 

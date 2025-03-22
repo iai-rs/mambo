@@ -177,9 +177,9 @@ def p_sample_loop(model, shape, ctx=None):
     return img
 
 @torch.no_grad()
-def sample(model, image_size, sampling_timesteps, ctx=None):
-    #return p_sample_loop(model, shape=image_size, ctx=ctx)
-    return ddim_sample(model, shape=image_size, sampling_timesteps=sampling_timesteps)
+def sample(model, image_size, sampling_timesteps=1000, ctx=None):
+    return p_sample_loop(model, shape=image_size, ctx=ctx)
+#     return ddim_sample(model, shape=image_size, sampling_timesteps=sampling_timesteps)
 
 # test sample
 @torch.no_grad()
@@ -283,7 +283,7 @@ def model_predictions(model, x, t, x_self_cond = None, clip_x_start = False, red
     return ModelPrediction(pred_noise, x_start)
 
 @torch.inference_mode()
-def ddim_sample(model, shape=(1, 1, 256,256), ctx=None, total_timesteps=1000, sampling_timesteps=500, eta=0.0, return_all_timesteps = False):
+def ddim_sample(model, shape=(1, 1, 256,256), ctx=None, total_timesteps=1000, sampling_timesteps=500, eta=1.0, return_all_timesteps = False):
     device = next(model.parameters()).device
 
     times = torch.linspace(-1, total_timesteps - 1, steps = sampling_timesteps + 1)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
