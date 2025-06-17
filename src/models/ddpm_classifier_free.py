@@ -723,13 +723,13 @@ class GaussianDiffusion(nn.Module):
                 img = x_start
                 continue
 
-            alpha = self.alphas_cumprod[time]
-            alpha_next = self.alphas_cumprod[time_next]
+            alpha = alphas_cumprod[time].to(device)
+            alpha_next = alphas_cumprod[time_next].to(device)
 
             sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
             c = (1 - alpha_next - sigma ** 2).sqrt()
 
-            noise = torch.randn_like(img)
+            noise = torch.randn_like(img, device=device)
 
             img = x_start * alpha_next.sqrt() + \
                   c * pred_noise + \
