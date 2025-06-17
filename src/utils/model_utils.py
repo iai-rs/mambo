@@ -36,13 +36,14 @@ def load_classifier_free_model(model_path, channels=1, dim=128, dim_mults=(1, 2,
 
 
 def generate_whole_image(model, device, batch_size=1, img_class='', sampling_timesteps=150):
+    print(device)
     model = model.to(device)
     model.eval()       
     if IS_COND:
         ctx = torch.tensor([img_class]).int().to(device)
         samples = sample_cond(model, image_size=(batch_size, 1, image_size, image_size), ctx=ctx, cond_scale=5.)
     else:
-        samples = sample(model, image_size=(batch_size, 1, image_size, image_size), sampling_timesteps=sampling_timesteps)    
+        samples = sample(model, image_size=(batch_size, 1, image_size, image_size), sampling_timesteps=sampling_timesteps, device=device)    
     model = model.to('cpu')
     return samples[0].cpu()
 
@@ -158,7 +159,7 @@ def generate_one_patch_ddpm(model, x, overlap_mask, overlapping_patch, device, t
 
     return in_img
 
-@torch.inference_mode()
+@torch.no_grad()
 def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, total_timesteps=1000, sampling_timesteps=150, eta=0.7):
     b = x.shape[0]
     x = x.to(device)
@@ -189,12 +190,13 @@ def generate_one_patch_ddim(model, x, overlap_mask, overlapping_patch, device, t
             img = x_start
             continue
 
-        alpha = alphas_cumprod[time]
-        alpha_next = alphas_cumprod[time_next]
+
+        alpha = alphas_cumprod[time].to(device)
+        alpha_next = alphas_cumprod[time_next].to(device)
             
         sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
         c = (1 - alpha_next - sigma ** 2).sqrt()
-        new_noise = torch.randn_like(img)
+        new_noise = torch.randn_like(img, device=device)
 
         img = x_start * alpha_next.sqrt() + c * pred_noise + sigma * new_noise
         

@@ -177,9 +177,9 @@ def p_sample_loop(model, shape, ctx=None):
     return img
 
 @torch.no_grad()
-def sample(model, image_size, sampling_timesteps, ctx=None):
+def sample(model, image_size, sampling_timesteps, ctx=None, device='cpu'):
     #return p_sample_loop(model, shape=image_size, ctx=ctx)
-    return ddim_sample(model, shape=image_size, sampling_timesteps=sampling_timesteps)
+    return ddim_sample(model, shape=image_size, sampling_timesteps=sampling_timesteps, device=device)
 
 # test sample
 @torch.no_grad()
@@ -282,8 +282,8 @@ def model_predictions(model, x, t, x_self_cond = None, clip_x_start = False, red
 
     return ModelPrediction(pred_noise, x_start)
 
-@torch.inference_mode()
-def ddim_sample(model, shape=(1, 1, 256,256), ctx=None, total_timesteps=1000, sampling_timesteps=500, eta=0.0, return_all_timesteps = False):
+@torch.no_grad()
+def ddim_sample(model, shape=(1, 1, 256,256), ctx=None, total_timesteps=1000, sampling_timesteps=500, eta=0.0, return_all_timesteps = False, device='cpu'):
     device = next(model.parameters()).device
 
     times = torch.linspace(-1, total_timesteps - 1, steps = sampling_timesteps + 1)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
@@ -294,29 +294,29 @@ def ddim_sample(model, shape=(1, 1, 256,256), ctx=None, total_timesteps=1000, sa
     imgs = [img]
 
     x_start = None
+    with torch.no_grad(): 
+        for time, time_next in tqdm(time_pairs, desc = 'sampling loop time step'):
+            time_cond = torch.full((shape[0],), time, device = device, dtype = torch.long)
+            pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start = False, rederive_pred_noise = True)
 
-    for time, time_next in tqdm(time_pairs, desc = 'sampling loop time step'):
-        time_cond = torch.full((shape[0],), time, device = device, dtype = torch.long)
-        pred_noise, x_start, *_ = model_predictions(model, img, time_cond, None, clip_x_start = False, rederive_pred_noise = True)
+            if time_next < 0:
+                img = x_start
+                imgs.append(img)
+                continue
 
-        if time_next < 0:
-            img = x_start
+            alpha = alphas_cumprod[time].to(device)
+            alpha_next = alphas_cumprod[time_next].to(device)
+
+            sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+            c = (1 - alpha_next - sigma ** 2).sqrt()
+
+            noise = torch.randn_like(img, device = device)
+
+            img = x_start * alpha_next.sqrt() + \
+                c * pred_noise + \
+                sigma * noise
+
             imgs.append(img)
-            continue
-
-        alpha = alphas_cumprod[time]
-        alpha_next = alphas_cumprod[time_next]
-
-        sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
-        c = (1 - alpha_next - sigma ** 2).sqrt()
-
-        noise = torch.randn_like(img)
-
-        img = x_start * alpha_next.sqrt() + \
-              c * pred_noise + \
-              sigma * noise
-
-        imgs.append(img)
 
     ret = img if not return_all_timesteps else torch.stack(imgs, dim = 1)
 
